@@ -1,6 +1,6 @@
 // Service worker : permet à Taf' de fonctionner hors connexion.
 // Pense à changer VERSION à chaque mise à jour des fichiers.
-const VERSION = 'taf-v1.0.1';
+const VERSION = 'taf-v1.0.2';
 const FILES = [
   './',
   './index.html',
@@ -38,6 +38,9 @@ self.addEventListener('fetch', (event) => {
         return res;
       })
       .catch(() => caches.match(event.request, { ignoreSearch: true }).then((r) => r || caches.match('./index.html')))
+  );
+});
+ 
   );
 });
  
