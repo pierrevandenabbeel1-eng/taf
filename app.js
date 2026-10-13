@@ -2,7 +2,7 @@
  * Toutes les données sont stockées sur l'appareil (localStorage).
  */
 'use strict';
-
+ 
 // =====================================================================
 // Données
 // =====================================================================
@@ -10,11 +10,11 @@ const STORE_KEY = 'taf-data-v1';
 const SINCE_FOREVER = '0000-01-01';
 const PALETTE = ['#6C4CF1', '#00A88F', '#FF7A3D', '#E84A7F', '#2E86DE', '#F5B700', '#8E44AD', '#27AE60', '#D35400', '#34495E'];
 const EMOJIS = ['🍔', '🍕', '☕', '🛒', '🌱', '🐶', '👶', '📦', '🧹', '⚽', '🎸', '💻', '🚲', '🏊', '💼'];
-
+ 
 let db = load();
-
+ 
 function emptyDb() { return { version: 1, employers: [], shifts: [], payments: [] }; }
-
+ 
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -25,7 +25,7 @@ function load() {
     return emptyDb();
   }
 }
-
+ 
 function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
@@ -33,10 +33,10 @@ function save() {
     toast('⚠️ Impossible d\'enregistrer : ' + e.message);
   }
 }
-
+ 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const empById = (id) => db.employers.find((e) => e.id === id);
-
+ 
 // =====================================================================
 // Formats (fr-BE)
 // =====================================================================
@@ -58,7 +58,7 @@ const monthShort = (y, m) => cap(new Date(y, m, 1).toLocaleDateString('fr-BE', {
 const parseDec = (s) => { const v = parseFloat(String(s).trim().replace(',', '.')); return Number.isFinite(v) ? v : null; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const alpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, '0');
-
+ 
 // =====================================================================
 // Calcul de la paie
 // =====================================================================
@@ -69,7 +69,7 @@ function rateFor(emp, key) {
   return (found || rates[0])?.rate ?? 0;
 }
 const currentRate = (emp) => rateFor(emp, dayKey(new Date()));
-
+ 
 /** Calcule la paie d'un shift (aussi pour un aperçu non enregistré). */
 function pay(shift, now = Date.now()) {
   const end = shift.end ?? now;
@@ -78,13 +78,23 @@ function pay(shift, now = Date.now()) {
   const minutes = Math.floor(worked / 60000);
   const emp = empById(shift.employerId);
   if (!emp) return { worked, minutes, rate: 0, base: 0, bonus: 0, total: 0 };
-
+ 
   const sd = new Date(shift.start);
   const rate = rateFor(emp, dayKey(sd));
   const base = (worked / 3600000) * rate;
   let bonus = 0;
-  const dow = sd.getDay();
-  if (emp.weekendPct > 0 && (dow === 0 || dow === 6)) bonus += (base * emp.weekendPct) / 100;
+  // Bonus dimanche : uniquement sur les heures prestées un dimanche (ex. samedi 22h → dimanche 2h = 2 h bonus)
+  if (emp.weekendPct > 0) {
+    let sundayMs = 0;
+    for (let i = 0; i < 2; i++) {
+      const d0 = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate() + i);
+      if (d0.getDay() !== 0) continue;
+      const from = Math.max(shift.start, d0.getTime());
+      const to = Math.min(end, new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 1).getTime());
+      if (to > from) sundayMs += to - from;
+    }
+    bonus += (Math.min(sundayMs, worked) / 3600000) * rate * (emp.weekendPct / 100);
+  }
   if (emp.eveningPct > 0) {
     const h = Math.min(23, Math.max(0, emp.eveningHour ?? 20));
     const eveStart = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate(), h).getTime();
@@ -95,10 +105,10 @@ function pay(shift, now = Date.now()) {
   }
   return { worked, minutes, rate, base, bonus, total: base + bonus };
 }
-
+ 
 const completed = () => db.shifts.filter((s) => s.end != null).sort((a, b) => b.start - a.start);
 const running = () => db.shifts.find((s) => s.end == null);
-
+ 
 /** Shifts terminés entre deux dates (incluses), triés chronologiquement. */
 function shiftsIn(from, to, employerId = null) {
   const a = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
@@ -114,15 +124,15 @@ const received = (empId) => db.payments.filter((p) => p.employerId === empId).re
 const balance = (empId) => earned(empId) - received(empId);
 const totalToReceive = () => db.employers.reduce((t, e) => t + Math.max(0, balance(e.id)), 0);
 const monthRange = (y, m) => [new Date(y, m, 1), new Date(y, m + 1, 0)];
-
+ 
 // =====================================================================
 // Petits composants HTML
 // =====================================================================
 const avatar = (emp, size = 44) =>
   `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${size / 2}px;background:${alpha(emp?.color || '#9E9E9E', 0.18)}">${esc(emp?.emoji || '❓')}</span>`;
-
+ 
 const kv = (label, value, cls = '') => `<div class="kv"><span>${esc(label)}</span><span class="${cls}">${esc(value)}</span></div>`;
-
+ 
 function shiftRow(s) {
   const e = empById(s.employerId);
   const p = pay(s);
@@ -138,7 +148,7 @@ function shiftRow(s) {
     <span class="right"><div class="bold">${money(p.total)}</div><div class="small muted">${duration(p.minutes)}</div></span>
   </button>`;
 }
-
+ 
 function chart() {
   const now = new Date();
   const months = [];
@@ -159,7 +169,7 @@ function chart() {
       <span class="lbl" style="${i === 5 ? 'font-weight:700;color:var(--text)' : ''}">${monthShort(d.m.getFullYear(), d.m.getMonth())}</span>
     </div>`).join('')}</div>`;
 }
-
+ 
 // =====================================================================
 // État de l'interface
 // =====================================================================
@@ -173,9 +183,9 @@ const ui = {
   exportYear: new Date().getFullYear(),
   exportEmployer: '',
 };
-
+ 
 const isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-
+ 
 // =====================================================================
 // Écrans
 // =====================================================================
@@ -186,7 +196,7 @@ function viewHome() {
   const h = now.getHours();
   const hello = h >= 5 && h < 12 ? 'Salut, bien dormi ? ☀️' : h >= 12 && h < 18 ? 'Hello ! 👋' : 'Bonsoir ! 🌙';
   const recent = completed().slice(0, 5);
-
+ 
   let html = `
     <div><h1>${hello}</h1><div class="muted">Voyons ce que tu as gagné.</div></div>
     ${!isStandalone() ? `<div class="install">📲 <b>Installe Taf' sur ton iPhone :</b> touche le bouton <b>Partager</b> de Safari puis <b>« Sur l'écran d'accueil »</b>. L'appli s'ouvrira alors en plein écran, comme une vraie app.</div>` : ''}
@@ -200,9 +210,9 @@ function viewHome() {
       </div>
     </div>
     <div class="card big" id="chrono-card">${chronoCard()}</div>`;
-
+ 
   if (completed().length) html += `<div class="card"><h3>Mes 6 derniers mois</h3>${chart()}</div>`;
-
+ 
   const byEmp = db.employers.map((e) => ({ e, list: monthShifts.filter((s) => s.employerId === e.id) })).filter((x) => x.list.length);
   if (byEmp.length) {
     html += `<div class="card"><h3>Ce mois-ci par employeur</h3>${byEmp.map(({ e, list }) => `
@@ -212,14 +222,14 @@ function viewHome() {
         <div class="bold" style="color:${e.color}">${money(sumPay(list))}</div>
       </div>`).join('')}</div>`;
   }
-
+ 
   if (recent.length) {
     html += `<div class="row"><h2 class="grow">Derniers shifts</h2><button class="btn ghost" data-action="tab" data-tab="calendar">Tout voir</button></div>
       ${recent.map(shiftRow).join('')}`;
   }
   return html;
 }
-
+ 
 function chronoCard() {
   if (!db.employers.length) {
     return `<h2>Bienvenue dans Taf' 🎉</h2>
@@ -254,7 +264,7 @@ function chronoCard() {
     <button class="btn xl" data-action="start">▶︎ Je commence</button>
     <div class="small muted center" style="margin-top:8px">Taux actuel : ${money(currentRate(empById(sel)))}/h</div>`;
 }
-
+ 
 function viewCalendar() {
   const y = ui.calMonth.getFullYear();
   const m = ui.calMonth.getMonth();
@@ -263,7 +273,7 @@ function viewCalendar() {
   const offset = (a.getDay() + 6) % 7; // lundi = 0
   const days = b.getDate();
   const today = dayKey(new Date());
-
+ 
   // Couleurs des employeurs par jour
   const colors = {};
   db.shifts.forEach((s) => {
@@ -273,7 +283,7 @@ function viewCalendar() {
     colors[k] = colors[k] || [];
     if (!colors[k].includes(e.color)) colors[k].push(e.color);
   });
-
+ 
   let cells = '';
   for (let i = 0; i < offset; i++) cells += '<span></span>';
   for (let d = 1; d <= days; d++) {
@@ -283,12 +293,12 @@ function viewCalendar() {
       <span>${d}</span><span class="dots">${(colors[k] || []).slice(0, 3).map((c) => `<i style="background:${c}"></i>`).join('')}</span>
     </button>`;
   }
-
+ 
   const sel = keyToDate(ui.calSelected);
   const dayShifts = db.shifts.filter((s) => dayKey(new Date(s.start)) === ui.calSelected).sort((x, z) => x.start - z.start);
   const dayTotal = sumPay(dayShifts.filter((s) => s.end != null));
   const last = completed()[0];
-
+ 
   return `
     <div class="row">
       <button class="iconbtn" data-action="cal-prev" aria-label="Mois précédent">‹</button>
@@ -305,13 +315,13 @@ function viewCalendar() {
     <button class="btn" data-action="new-shift" ${db.employers.length ? '' : 'disabled'}>＋ Ajouter un shift</button>
     ${last ? `<button class="btn light" data-action="copy-last">📋 Copier le dernier shift ici (${esc(empById(last.employerId)?.emoji || '')} ${timeStr(last.start)}–${timeStr(last.end)})</button>` : ''}`;
 }
-
+ 
 function viewEmployers() {
   const now = new Date();
   const [a, b] = monthRange(now.getFullYear(), now.getMonth());
   const list = db.employers.map((e) => {
     const ms = shiftsIn(a, b, e.id);
-    const bonus = [e.weekendPct > 0 ? `WE +${e.weekendPct}%` : '', e.eveningPct > 0 ? `soir +${e.eveningPct}%` : ''].filter(Boolean).join(' · ');
+    const bonus = [e.weekendPct > 0 ? `dimanche +${e.weekendPct}%` : '', e.eveningPct > 0 ? `soir +${e.eveningPct}%` : ''].filter(Boolean).join(' · ');
     return `<button class="shift" style="background:${alpha(e.color, 0.12)};padding:16px;border-radius:24px" data-action="edit-employer" data-id="${e.id}">
       ${avatar(e, 52)}
       <span class="grow">
@@ -326,7 +336,7 @@ function viewEmployers() {
     ${list.length ? list.join('') : '<div class="muted">Aucun employeur pour l\'instant. Ajoute le premier 👇</div>'}
     <button class="btn" data-action="new-employer">＋ Ajouter un employeur</button>`;
 }
-
+ 
 function viewPay() {
   const cards = db.employers.map((e) => {
     const ea = earned(e.id);
@@ -357,7 +367,7 @@ function viewPay() {
     ${cards.join('')}
     ${pays.length ? '<h2>Paiements reçus</h2>' + pays.join('') : ''}`;
 }
-
+ 
 function exportSelection() {
   let from, to, label, tag;
   if (ui.exportPeriod === 'month') {
@@ -377,7 +387,7 @@ function exportSelection() {
   const base = ('Taf_' + tag + (emp ? '_' + emp.name : '')).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_');
   return { shifts, label, emp, base };
 }
-
+ 
 function viewExport() {
   const { shifts, label } = exportSelection();
   return `<h1>Exporter</h1>
@@ -401,7 +411,7 @@ function viewExport() {
     <button class="btn" data-action="export-pdf">📄 Relevé PDF (pour l'employeur)</button>
     <button class="btn light" data-action="export-csv">📊 Fichier Excel (CSV)</button>
     <div class="small muted">Le fichier s'ouvre dans le menu de partage : WhatsApp, Mail, Fichiers…</div>
-
+ 
     <div class="card" style="margin-top:12px">
       <h3>💾 Sauvegarde</h3>
       <div class="small muted" style="margin-bottom:12px">Tes données sont uniquement sur ce téléphone. Fais une sauvegarde de temps en temps (dans Fichiers ou iCloud Drive), surtout avant de changer de téléphone.</div>
@@ -412,23 +422,23 @@ function viewExport() {
       <input type="file" id="restore-file" accept="application/json,.json" hidden>
     </div>`;
 }
-
+ 
 // =====================================================================
 // Rendu
 // =====================================================================
 const VIEWS = { home: viewHome, calendar: viewCalendar, employers: viewEmployers, pay: viewPay, export: viewExport };
-
+ 
 function render() {
   document.getElementById('view').innerHTML = VIEWS[ui.tab]();
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === ui.tab));
 }
-
+ 
 function setTab(tab) {
   ui.tab = tab;
   render();
   window.scrollTo(0, 0);
 }
-
+ 
 // Rafraîchit le chrono chaque seconde, sans tout redessiner
 setInterval(() => {
   const r = running();
@@ -440,7 +450,7 @@ setInterval(() => {
   t.textContent = chrono(p.worked);
   l.textContent = '+ ' + money(p.total);
 }, 1000);
-
+ 
 let toastTimer = null;
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -449,7 +459,7 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
 }
-
+ 
 // =====================================================================
 // Feuilles (formulaires)
 // =====================================================================
@@ -466,7 +476,7 @@ function openSheet(title, bodyHtml, onMount) {
   onMount?.(bg.querySelector('.sheet'));
 }
 function closeSheet() { document.getElementById('sheet-root').innerHTML = ''; }
-
+ 
 // ---------- Shift ----------
 function shiftSheet(shift, initialKey) {
   if (!db.employers.length) { toast('Ajoute d\'abord un employeur 💼'); return; }
@@ -476,7 +486,7 @@ function shiftSheet(shift, initialKey) {
   const key = shift ? dayKey(new Date(shift.start)) : (initialKey || dayKey(new Date()));
   const st = tpl ? timeStr(tpl.start) : '09:00';
   const en = shift?.end ? timeStr(shift.end) : (tpl?.end ? timeStr(tpl.end) : '13:00');
-
+ 
   openSheet(shift ? 'Modifier le shift' : 'Nouveau shift', `
     <div class="field"><label>Employeur</label>
       <select id="f-emp">${db.employers.map((e) => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.emoji)} ${esc(e.name)}</option>`).join('')}</select></div>
@@ -496,7 +506,7 @@ function shiftSheet(shift, initialKey) {
   `, (el) => {
     let running = isRun;
     const $ = (id) => el.querySelector('#' + id);
-
+ 
     const build = () => {
       const k = $('f-date').value || key;
       const d = keyToDate(k);
@@ -519,7 +529,7 @@ function shiftSheet(shift, initialKey) {
         overnight,
       };
     };
-
+ 
     const refresh = () => {
       const s = build();
       const p = pay(s);
@@ -527,14 +537,14 @@ function shiftSheet(shift, initialKey) {
     };
     el.querySelectorAll('input,select').forEach((i) => i.addEventListener('input', refresh));
     refresh();
-
+ 
     $('f-finish')?.addEventListener('click', () => {
       running = false;
       $('f-finish').remove();
       $('f-end').hidden = false;
       refresh();
     });
-
+ 
     $('f-save').addEventListener('click', () => {
       const s = build();
       const err = $('f-error');
@@ -545,7 +555,7 @@ function shiftSheet(shift, initialKey) {
       if (i >= 0) db.shifts[i] = s; else db.shifts.push(s);
       save(); closeSheet(); render();
     });
-
+ 
     $('f-delete')?.addEventListener('click', () => {
       if (!confirm('Supprimer ce shift ? Cette action est définitive.')) return;
       db.shifts = db.shifts.filter((x) => x.id !== shift.id);
@@ -553,14 +563,14 @@ function shiftSheet(shift, initialKey) {
     });
   });
 }
-
+ 
 // ---------- Employeur ----------
 function employerSheet(emp) {
   let emoji = emp?.emoji || '💼';
   let color = emp?.color || PALETTE[db.employers.length % PALETTE.length];
   const cur = emp ? currentRate(emp) : null;
   const history = emp ? [...emp.rates].sort((a, b) => (a.from < b.from ? 1 : -1)) : [];
-
+ 
   openSheet(emp ? 'Modifier' : 'Nouvel employeur', `
     <div class="row" style="margin-bottom:14px"><span id="e-avatar"></span><h2 id="e-title" class="grow ellipsis"></h2></div>
     <div class="field"><label>Nom</label><input type="text" id="e-name" placeholder="Snack du coin, Mme Dupont…" value="${esc(emp?.name || '')}"></div>
@@ -570,11 +580,11 @@ function employerSheet(emp) {
     <div class="field" id="e-from-wrap" hidden><label>Nouveau taux appliqué à partir du</label><input type="date" id="e-from" value="${dayKey(new Date())}">
       <div class="small muted">Les shifts avant cette date gardent l'ancien taux 👍</div></div>
     <div class="fields3">
-      <div class="field"><label>Bonus WE %</label><input type="number" inputmode="numeric" id="e-we" value="${emp?.weekendPct || ''}" placeholder="0"></div>
+      <div class="field"><label>Bonus dim. %</label><input type="number" inputmode="numeric" id="e-we" value="${emp?.weekendPct || ''}" placeholder="0"></div>
       <div class="field"><label>Bonus soir %</label><input type="number" inputmode="numeric" id="e-ev" value="${emp?.eveningPct || ''}" placeholder="0"></div>
       <div class="field"><label>Soir dès (h)</label><input type="number" inputmode="numeric" id="e-evh" value="${emp?.eveningHour ?? 20}"></div>
     </div>
-    <div class="small muted" style="margin:-4px 0 14px">Facultatif. WE = samedi et dimanche. Soir = heures après l'heure choisie (jusqu'à 6 h).</div>
+    <div class="small muted" style="margin:-4px 0 14px">Facultatif. Bonus dim. = heures prestées le dimanche. Soir = heures après l'heure choisie (jusqu'à 6 h).</div>
     ${history.length > 1 ? `<div class="card" style="margin-bottom:14px"><h3>Historique des taux</h3>${history.map((r) => `
       <div class="row" style="padding:4px 0"><span class="grow">${r.from === SINCE_FOREVER ? 'Depuis le début' : 'À partir du ' + dateStr(keyToDate(r.from))}</span>
       <b>${money(r.rate)}/h</b>${r.from !== SINCE_FOREVER ? `<button class="iconbtn" data-del-rate="${r.from}" aria-label="Supprimer">✕</button>` : '<span style="width:40px"></span>'}</div>`).join('')}</div>` : ''}
@@ -597,12 +607,12 @@ function employerSheet(emp) {
     $('e-name').addEventListener('input', paint);
     $('e-rate').addEventListener('input', paint);
     paint();
-
+ 
     el.querySelectorAll('[data-del-rate]').forEach((b) => b.addEventListener('click', () => {
       emp.rates = emp.rates.filter((r) => r.from !== b.dataset.delRate);
       save(); closeSheet(); render(); employerSheet(emp);
     }));
-
+ 
     $('e-save').addEventListener('click', () => {
       const err = $('e-error');
       const name = $('e-name').value.trim();
@@ -630,7 +640,7 @@ function employerSheet(emp) {
       db.employers.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
       save(); closeSheet(); render();
     });
-
+ 
     $('e-delete')?.addEventListener('click', () => {
       if (!confirm(`Supprimer ${emp.name} ?\n\n⚠️ Tous ses shifts et paiements seront aussi supprimés. Pense à faire un export avant !`)) return;
       db.employers = db.employers.filter((e) => e.id !== emp.id);
@@ -640,7 +650,7 @@ function employerSheet(emp) {
     });
   });
 }
-
+ 
 // ---------- Paiement ----------
 function paymentSheet() {
   const best = [...db.employers].sort((a, b) => balance(b.id) - balance(a.id))[0];
@@ -665,7 +675,7 @@ function paymentSheet() {
     });
   });
 }
-
+ 
 // =====================================================================
 // Export (CSV, PDF, sauvegarde)
 // =====================================================================
@@ -688,7 +698,7 @@ async function shareFile(blob, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
-
+ 
 function exportRows(shifts) {
   return shifts.map((s) => {
     const p = pay(s);
@@ -699,7 +709,7 @@ function exportRows(shifts) {
     };
   });
 }
-
+ 
 function exportCsv() {
   const { shifts, base } = exportSelection();
   if (!shifts.length) { toast('Aucun shift sur cette période.'); return; }
@@ -713,20 +723,20 @@ function exportCsv() {
   out += `TOTAL;;;;;${duration(tm)};${dec(tm / 60)};;${dec(rows.reduce((t, r) => t + r.bonus, 0))};${dec(rows.reduce((t, r) => t + r.total, 0))};\r\n`;
   shareFile(new Blob([out], { type: 'text/csv' }), base + '.csv');
 }
-
+ 
 function exportPdf() {
   const { shifts, label, emp, base } = exportSelection();
   if (!shifts.length) { toast('Aucun shift sur cette période.'); return; }
   if (!window.jspdf) { toast('Module PDF indisponible.'); return; }
   const rows = exportRows(shifts);
   // Les polices PDF standard ne connaissent pas les espaces fines : on les remplace
-  const m = (v) => money(v).replace(/[  ]/g, ' ');
-
+  const m = (v) => money(v).replace(/[  ]/g, ' ');
+ 
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   const W = 595, H = 842, M = 40, RH = 18;
   const cols = [['Date', 62, 0], ['Employeur', 128, 0], ['Début', 42, 0], ['Fin', 42, 0], ['Pause', 40, 1], ['Heures', 48, 1], ['Taux', 60, 1], ['Total', 93, 1]];
   let y = M, page = 0;
-
+ 
   const fit = (t, w) => { let s = String(t); if (doc.getTextWidth(s) <= w) return s; while (s && doc.getTextWidth(s + '...') > w) s = s.slice(0, -1); return s + '...'; };
   const cells = (vals) => {
     let x = M;
@@ -756,7 +766,7 @@ function exportPdf() {
     y += RH;
     doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0);
   };
-
+ 
   newPage();
   rows.forEach((r, i) => {
     if (y + RH > H - M - 20) newPage();
@@ -765,7 +775,7 @@ function exportPdf() {
     cells([dateStr(r.date), r.employer, r.start, r.end, r.breakMin ? r.breakMin + ' min' : '', duration(r.minutes), m(r.rate), m(r.total)]);
     y += RH;
   });
-
+ 
   if (y + RH * 4 > H - M - 20) newPage();
   y += 8;
   const tm = rows.reduce((t, r) => t + r.minutes, 0);
@@ -777,7 +787,7 @@ function exportPdf() {
   doc.text(`Total : ${duration(tm)}  -  ${m(tt)}`, W - M - 4, y + RH - 3, { align: 'right' });
   y += RH + 20;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(90, 90, 90);
-  if (tb > 0.005) { doc.text(`Dont majorations (week-end / soir) : ${m(tb)}`, M, y); y += 16; }
+  if (tb > 0.005) { doc.text(`Dont majorations (dimanche / soir) : ${m(tb)}`, M, y); y += 16; }
   const names = [...new Set(rows.map((r) => r.employer))].sort();
   if (names.length > 1) {
     names.forEach((n) => {
@@ -789,12 +799,12 @@ function exportPdf() {
   }
   shareFile(doc.output('blob'), base + '.pdf');
 }
-
+ 
 function backup() {
   const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
   shareFile(blob, `Taf_sauvegarde_${dayKey(new Date())}.json`);
 }
-
+ 
 function restore(file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -811,18 +821,18 @@ function restore(file) {
   };
   reader.readAsText(file);
 }
-
+ 
 // =====================================================================
 // Actions (délégation d'événements)
 // =====================================================================
 document.addEventListener('click', (ev) => {
   const tabBtn = ev.target.closest('#tabbar button');
   if (tabBtn) { setTab(tabBtn.dataset.tab); return; }
-
+ 
   const el = ev.target.closest('[data-action]');
   if (!el || el.closest('#sheet-root')) return;
   const id = el.dataset.id;
-
+ 
   switch (el.dataset.action) {
     case 'tab': setTab(el.dataset.tab); break;
     case 'new-employer': employerSheet(null); break;
@@ -889,15 +899,15 @@ document.addEventListener('click', (ev) => {
     case 'restore': document.getElementById('restore-file').click(); break;
   }
 });
-
+ 
 document.addEventListener('change', (ev) => {
   if (ev.target.id === 'exp-emp') { ui.exportEmployer = ev.target.value; render(); }
   if (ev.target.id === 'restore-file' && ev.target.files[0]) { restore(ev.target.files[0]); ev.target.value = ''; }
 });
-
+ 
 // Revenir sur l'app (après l'avoir quittée) : on redessine pour un chrono à jour
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
-
+ 
 // =====================================================================
 // Démarrage
 // =====================================================================
