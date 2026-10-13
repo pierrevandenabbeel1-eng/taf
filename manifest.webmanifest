@@ -1,0 +1,17 @@
+{
+  "name": "Taf' – mes heures de job",
+  "short_name": "Taf'",
+  "description": "Pointage d'heures et suivi des salaires pour jobs étudiants",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F2FA",
+  "theme_color": "#6C4CF1",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

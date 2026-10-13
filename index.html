@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Taf'</title>
+  <meta name="description" content="Pointage d'heures et suivi des salaires pour jobs étudiants">
+  <meta name="theme-color" content="#6C4CF1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Taf'">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="home" class="active"><span class="ti">🏠</span><span>Accueil</span></button>
+    <button data-tab="calendar"><span class="ti">📅</span><span>Calendrier</span></button>
+    <button data-tab="employers"><span class="ti">💼</span><span>Employeurs</span></button>
+    <button data-tab="pay"><span class="ti">💶</span><span>Paie</span></button>
+    <button data-tab="export"><span class="ti">📤</span><span>Export</span></button>
+  </nav>
+
+  <div id="sheet-root"></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
